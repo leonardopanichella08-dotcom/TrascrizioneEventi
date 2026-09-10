@@ -23,9 +23,13 @@ html, body {
 
 #badgeRow { display: flex; align-items: center; gap: 6px; }
 
-/* Badge nascosto: nulla di visibile, ma la zona-invito in alto a destra
-   diventa attiva per riportarlo passandoci sopra col mouse. */
-body.badge-hidden #controlZone { display: none; }
+/* Badge nascosto: sparisce la pillola "Live Translate" e il pannello, ma la
+   "x" per chiudere l'app resta sempre raggiungibile (piccola e sbiadita).
+   La zona-invito in alto a destra riporta il badge completo al passaggio del mouse. */
+body.badge-hidden #toggleBtn,
+body.badge-hidden #panel { display: none; }
+body.badge-hidden #quitQuickBtn { opacity: 0.3; }
+body.badge-hidden #quitQuickBtn:hover { opacity: 1; border-color: var(--off); color: var(--off); }
 #revealZone {
   position: absolute; top: 0; right: 0;
   width: 60px; height: 60px;
