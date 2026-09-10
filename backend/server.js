@@ -10,7 +10,7 @@ const { Server } = require('socket.io');
 
 const { RoomManager } = require('./src/roomManager');
 const { sanitizeChunkPayload, isValidRoomId, sanitizeText, sanitizeLang } = require('./src/sanitize');
-const { translateViaMyMemory } = require('./src/translate');
+const { translateText } = require('./src/translate');
 const logger = require('./src/logger');
 
 const PORT = process.env.PORT || 3001;
@@ -50,11 +50,11 @@ app.post('/translate', async (req, res) => {
   }
 
   try {
-    const translatedText = await translateViaMyMemory(text, source, target);
+    const translatedText = await translateText(text, source, target);
     res.json({ translatedText });
   } catch (err) {
     logger.warn(`Traduzione fallita (${source} -> ${target}): ${err.message}`);
-    res.status(502).json({ error: 'Servizio di traduzione temporaneamente non disponibile.' });
+    res.status(502).json({ error: 'Servizio di traduzione non disponibile.', detail: err.message });
   }
 });
 

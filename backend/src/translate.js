@@ -1,57 +1,79 @@
 'use strict';
 
 /**
- * Proxy di traduzione lato server verso MyMemory (api.mymemory.translated.net),
- * un servizio pubblico e gratuito che non richiede API key per un uso normale.
- * Il proxy vive sul backend per due motivi:
- *   1) evitare CORS lato browser;
- *   2) poter sostituire il provider (DeepL/OpenAI/Google) in un solo punto,
- *      senza toccare il frontend.
+ * Proxy di traduzione lato server. Prova piu' provider gratuiti in ordine e
+ * usa il primo che risponde: i servizi gratuiti spesso bloccano gli IP dei
+ * datacenter (Render), quindi averne piu' di uno rende il tutto affidabile.
+ * Tutta la logica sta qui: per passare a DeepL/OpenAI si tocca un solo file.
  */
 
-// MyMemory vuole alcuni codici lingua in formato esteso invece del semplice ISO 639-1.
-const LANG_OVERRIDES = {
-  zh: 'zh-CN',
-};
+// MyMemory vuole alcuni codici lingua in formato esteso; gli altri provider
+// preferiscono il codice ISO breve.
+const MYMEMORY_OVERRIDES = { zh: 'zh-CN' };
 
-function normalizeLang(code) {
-  const clean = (code || '').trim();
-  return LANG_OVERRIDES[clean] || clean;
+function shortLang(code) {
+  return String(code || '').trim().toLowerCase().split('-')[0] || 'en';
 }
+function myMemoryLang(code) {
+  const clean = String(code || '').trim();
+  return MYMEMORY_OVERRIDES[clean] || clean;
+}
+
+async function fetchJson(url, ms = 7000) {
+  const r = await fetch(url, { signal: AbortSignal.timeout(ms), headers: { 'User-Agent': 'LiveTranslate/1.0' } });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+/** MyMemory — quota gratuita alzata a ~50k parole/giorno se MYMEMORY_ACCOUNT_EMAIL e' impostata. */
+async function viaMyMemory(text, source, target) {
+  const langpair = `${myMemoryLang(source)}|${myMemoryLang(target)}`;
+  const email = process.env.MYMEMORY_ACCOUNT_EMAIL;
+  const de = email ? `&de=${encodeURIComponent(email)}` : '';
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(langpair)}${de}`;
+  const data = await fetchJson(url);
+  if (data.responseStatus && Number(data.responseStatus) !== 200) {
+    throw new Error(data.responseDetails || 'MyMemory rifiutato');
+  }
+  const t = data.responseData?.translatedText;
+  if (!t) throw new Error('MyMemory risposta vuota');
+  return t;
+}
+
+/** Lingva Translate — front-end privacy per Google Translate, senza chiave, nessuna quota pratica. */
+function makeLingva(host) {
+  return async function viaLingva(text, source, target) {
+    const url = `https://${host}/api/v1/${shortLang(source)}/${shortLang(target)}/${encodeURIComponent(text)}`;
+    const data = await fetchJson(url);
+    const t = data.translation;
+    if (!t) throw new Error(`${host} risposta vuota`);
+    return t;
+  };
+}
+
+// Ordine: prima i proxy Google (nessuna quota), poi MyMemory come rete di sicurezza.
+const PROVIDERS = [
+  { name: 'lingva.ml', fn: makeLingva('lingva.ml') },
+  { name: 'lingva.garudalinux.org', fn: makeLingva('lingva.garudalinux.org') },
+  { name: 'mymemory', fn: viaMyMemory },
+];
 
 /**
- * Traduce `text` da `source` a `target`. Lancia un errore descrittivo se il
- * servizio non e' raggiungibile o restituisce una risposta anomala (es. quota
- * giornaliera gratuita esaurita), cosi' il chiamante puo' decidere il fallback.
+ * Traduce `text` provando i provider in ordine. Lancia solo se falliscono
+ * tutti; l'errore riporta cosa ha detto ciascuno, per la diagnostica.
  */
-async function translateViaMyMemory(text, source, target) {
-  const langpair = `${normalizeLang(source)}|${normalizeLang(target)}`;
-  // Con MYMEMORY_ACCOUNT_EMAIL impostata, MyMemory alza la quota gratuita giornaliera
-  // da ~5.000 a ~50.000 parole. Utile perche' lo streaming interim moltiplica
-  // le chiamate. Senza, l'app resta funzionante ma la quota dura pochi minuti
-  // di parlato continuo (poi degrada a mostrare il testo NON tradotto).
-  const email = process.env.MYMEMORY_ACCOUNT_EMAIL;
-  const deParam = email ? `&de=${encodeURIComponent(email)}` : '';
-  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(langpair)}${deParam}`;
-
-  const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (!response.ok) {
-    throw new Error(`MyMemory HTTP ${response.status}`);
+async function translateText(text, source, target) {
+  const errors = [];
+  for (const p of PROVIDERS) {
+    try {
+      const out = await p.fn(text, source, target);
+      if (out && out.trim()) return out;
+      errors.push(`${p.name}: vuoto`);
+    } catch (e) {
+      errors.push(`${p.name}: ${e.message}`);
+    }
   }
-
-  const data = await response.json();
-
-  // MyMemory risponde sempre con HTTP 200 anche in caso di errore applicativo
-  // (es. quota esaurita): l'esito reale va letto da responseStatus.
-  if (data.responseStatus && Number(data.responseStatus) !== 200) {
-    throw new Error(data.responseDetails || 'MyMemory ha rifiutato la richiesta');
-  }
-
-  const translated = data.responseData?.translatedText;
-  if (!translated) {
-    throw new Error('Risposta di traduzione vuota');
-  }
-  return translated;
+  throw new Error(`tutti i provider falliti [${errors.join(' | ')}]`);
 }
 
-module.exports = { translateViaMyMemory };
+module.exports = { translateText, translateViaMyMemory: viaMyMemory };
