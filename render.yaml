@@ -1,0 +1,22 @@
+# Blueprint per il deploy su Render (https://render.com).
+# Un solo servizio web: il backend Node/Socket.io, che serve anche il frontend
+# statico (pagina di ingresso, dashboard speaker, display) dalla stessa origine.
+#
+# Deploy: su Render -> New -> Blueprint -> collega questo repo. Render legge
+# questo file e configura tutto da solo. Nessuna variabile segreta richiesta.
+services:
+  - type: web
+    name: trascrizione-eventi
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: SPEAKER_GRACE_PERIOD_SECONDS
+        value: "60"
+      - key: ROOM_MAX_IDLE_HOURS
+        value: "6"
