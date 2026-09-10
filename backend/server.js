@@ -29,7 +29,13 @@ app.use(express.static(FRONTEND_DIR));
 
 // Endpoint di health-check, utile per Render/Railway e per uptime monitor.
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', activeRooms: roomManager.rooms.size, uptimeSeconds: process.uptime() });
+  res.json({
+    status: 'ok',
+    activeRooms: roomManager.rooms.size,
+    uptimeSeconds: process.uptime(),
+    // true = quota MyMemory alzata (~50k parole/giorno). Non espone l'email.
+    translateQuotaBoosted: Boolean(process.env.MYMEMORY_EMAIL),
+  });
 });
 
 // Proxy di traduzione lato server (vedi src/translate.js): tiene la logica del
