@@ -30,7 +30,7 @@ const quitQuickBtn = document.getElementById('quitQuickBtn');
 const pasteBtn = document.getElementById('pasteBtn');
 const subtitleZone = document.getElementById('subtitleZone');
 
-const renderer = new SubtitleRenderer(subtitleZone, { maxLines: 3 });
+const renderer = new SubtitleRenderer(subtitleZone);
 
 // -------------------------------------------------------------------
 // 1) Interattivita' selettiva della finestra (click-through altrove)

@@ -102,9 +102,17 @@ export class TranscriptionEngine {
     this._recognition = null;
     this._isListening = false; // stato "desiderato" dall'utente (vs stato reale del motore)
     this._shouldRun = false; // flag per distinguere stop intenzionale da stop spontaneo
-    this._debounceTimer = null;
-    this._debounceMs = 350;
     this._utteranceCounter = 0;
+
+    // Streaming interim: traduce/invia al massimo una volta ogni _interimThrottleMs,
+    // usando sempre il testo piu' recente, e salta se non e' cambiato niente.
+    // Cosi' il flusso di parole a schermo e' quasi istantaneo senza moltiplicare
+    // all'infinito le chiamate al servizio di traduzione.
+    this._interimThrottleMs = 400;
+    this._interimTimer = null;
+    this._pendingInterim = '';
+    this._lastInterimSent = '';
+    this._lastInterimWordCount = 0;
   }
 
   /** Consente di sostituire il motore di traduzione (DeepL/OpenAI/Google/LibreTranslate). */
@@ -139,7 +147,8 @@ export class TranscriptionEngine {
   /** Ferma volontariamente il riconoscimento (l'utente preme Pausa/Stop). */
   stop() {
     this._shouldRun = false;
-    clearTimeout(this._debounceTimer);
+    clearTimeout(this._interimTimer);
+    this._interimTimer = null;
     this._recognition?.stop();
     this._setListening(false);
   }
@@ -218,21 +227,38 @@ export class TranscriptionEngine {
     }
   }
 
-  /** Traduzioni interim: bufferizzate/debounced per non sovraccaricare l'engine di traduzione. */
+  /**
+   * Streaming interim: throttle a intervallo fisso (leading+trailing) che usa
+   * sempre l'ultimo testo disponibile e non ritraduce se e' identico all'ultimo
+   * inviato. Serve un flusso quasi istantaneo senza saturare il traduttore.
+   */
   _scheduleInterimTranslation(text) {
-    clearTimeout(this._debounceTimer);
-    this._debounceTimer = setTimeout(async () => {
-      const translated = await this._safeTranslate(text);
+    this._pendingInterim = text;
+    if (this._interimTimer) return;
+    this._interimTimer = setTimeout(async () => {
+      this._interimTimer = null;
+      const t = this._pendingInterim;
+      if (!t || t === this._lastInterimSent) return;
+      // Traduci solo se e' comparsa almeno una parola nuova: le rifiniture
+      // dello stesso token dal riconoscitore non valgono una chiamata API.
+      const words = t.split(/\s+/).filter(Boolean).length;
+      if (words <= this._lastInterimWordCount && t.length <= this._lastInterimSent.length) return;
+      this._lastInterimWordCount = words;
+      this._lastInterimSent = t;
+      const translated = await this._safeTranslate(t);
       if (translated == null) return;
       this.onTranslationPreview(translated);
-      this._emitChunk({ status: 'interim', originalText: text, translatedText: translated });
-    }, this._debounceMs);
+      this._emitChunk({ status: 'interim', originalText: t, translatedText: translated });
+    }, this._interimThrottleMs);
   }
 
-  /** Frase definitiva: tradotta subito (nessun debounce) per garantire accuratezza e tempestivita'. */
+  /** Frase definitiva: tradotta subito per consolidare il flusso. */
   async _processFinal(text) {
     if (!text) return;
-    clearTimeout(this._debounceTimer); // scarta eventuale traduzione interim ancora in coda per questa frase
+    clearTimeout(this._interimTimer); // scarta l'interim ancora in coda per questa frase
+    this._interimTimer = null;
+    this._lastInterimSent = '';
+    this._lastInterimWordCount = 0;
 
     const translated = await this._safeTranslate(text);
     if (translated == null) return;

@@ -26,7 +26,13 @@ function normalizeLang(code) {
  */
 async function translateViaMyMemory(text, source, target) {
   const langpair = `${normalizeLang(source)}|${normalizeLang(target)}`;
-  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(langpair)}`;
+  // Con MYMEMORY_EMAIL impostata, MyMemory alza la quota gratuita giornaliera
+  // da ~5.000 a ~50.000 parole. Utile perche' lo streaming interim moltiplica
+  // le chiamate. Senza, l'app resta funzionante ma la quota dura pochi minuti
+  // di parlato continuo (poi degrada a mostrare il testo NON tradotto).
+  const email = process.env.MYMEMORY_EMAIL;
+  const deParam = email ? `&de=${encodeURIComponent(email)}` : '';
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(langpair)}${deParam}`;
 
   const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
   if (!response.ok) {

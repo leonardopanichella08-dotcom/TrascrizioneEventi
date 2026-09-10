@@ -2,83 +2,85 @@
  * subtitle-renderer.js
  * ----------------------------------------------------------------------------
  * Logica di rendering dei sottotitoli condivisa tra:
- *   - frontend/display.html (vista browser classica / OBS Browser Source)
+ *   - frontend/display.html (vista browser / OBS Browser Source)
  *   - overlay-app (finestra desktop trasparente sempre in primo piano)
  *
- * Riceve un container gia' posizionato/stilizzato dal chiamante e gestisce
- * solo la logica delle righe: aggiunta, sostituzione dell'anteprima interim,
- * animazione di ingresso/uscita e limite massimo di righe visibili.
+ * Modalita' "flusso di parole": non mostra l'intera frase, ma un flusso
+ * continuo in cui l'ultima parola detta compare subito ed evidenziata; il
+ * testo piu' vecchio scorre verso l'alto e sparisce. Al massimo 2 righe
+ * visibili (il resto viene tagliato dal contenitore). Pause ed errori dello
+ * speaker non contano: il flusso non si ferma mai ad aspettare la frase.
  *
- * Ogni riga e' un "chip" (sfondo semi-trasparente + bordi arrotondati) cosi'
- * il testo resta leggibile sopra qualunque contenuto sottostante (slide,
- * PDF, pagina web) — come una sovrapposizione PNG, non un pannello opaco.
+ * NB: la copia in overlay-app/renderer/subtitle-renderer.js va tenuta
+ * allineata a questa (import cross-cartella non affidabile nel pacchetto).
  */
 
 export class SubtitleRenderer {
   /**
    * @param {HTMLElement} container
-   * @param {{ maxLines?: number, fallbackRemoveMs?: number }} [opts]
+   * @param {{ maxWords?: number }} [opts] maxWords = limite di sicurezza sul
+   *   testo tenuto in memoria; le righe VISIBILI restano 2, imposte dal CSS.
    */
-  constructor(container, { maxLines = 3, fallbackRemoveMs = 700 } = {}) {
+  constructor(container, { maxWords = 28 } = {}) {
     this.container = container;
-    this.maxLines = maxLines;
-    this.fallbackRemoveMs = fallbackRemoveMs;
-    this.interimEl = null;
+    this.maxWords = maxWords;
+    this._committed = '';   // parlato gia' finalizzato (troncato in coda a maxWords)
+    this._rendered = '';    // ultimo testo effettivamente a schermo
+    this._lastHeadWord = '';
+    // Il testo vive in un figlio ancorato in basso (via CSS): quando supera
+    // le 2 righe, la parte alta esce dal contenitore e viene tagliata.
+    this.streamEl = document.createElement('div');
+    this.streamEl.className = 'subtitle-stream';
+    this.container.appendChild(this.streamEl);
   }
 
-  /** Aggiunge una riga definitiva; rimpiazza l'eventuale anteprima interim in corso. */
-  appendFinal(text) {
-    if (!text) return;
-    if (this.interimEl) {
-      this.interimEl.remove();
-      this.interimEl = null;
+  _tailByWords(s) {
+    const w = String(s).trim().split(/\s+/).filter(Boolean);
+    return w.slice(-this.maxWords).join(' ');
+  }
+
+  /** Disegna il testo: corpo come testo semplice + ultima parola in uno span animabile. */
+  _render(fullText) {
+    const text = this._tailByWords(fullText);
+    if (text === this._rendered) return;
+
+    const words = text.split(' ');
+    const headWord = words.length ? words[words.length - 1] : '';
+    const body = words.slice(0, -1).join(' ');
+
+    this.streamEl.textContent = body ? body + ' ' : '';
+    if (headWord) {
+      const headEl = document.createElement('span');
+      headEl.className = 'head-word';
+      headEl.textContent = headWord;
+      // Anima solo quando la parola in testa cambia davvero, non ad ogni
+      // rifinitura dello stesso token da parte del riconoscitore.
+      if (headWord !== this._lastHeadWord) headEl.classList.add('pop');
+      this.streamEl.appendChild(headEl);
     }
 
-    const line = document.createElement('div');
-    line.className = 'subtitle-line final';
-    line.textContent = text;
-    this.container.appendChild(line);
-
-    // Forza un reflow cosi' la transizione parte davvero da opacity:0.
-    // eslint-disable-next-line no-unused-expressions
-    line.offsetHeight;
-    requestAnimationFrame(() => line.classList.add('shown'));
-
-    this._pruneOldLines();
+    this._rendered = text;
+    this._lastHeadWord = headWord;
   }
 
-  /** Aggiorna (o crea) la riga di anteprima interim, senza animazioni ripetute ad ogni battito. */
+  /** Anteprima in corso: aggiorna il flusso in tempo reale. */
   updateInterim(text) {
     if (!text) return;
-    if (!this.interimEl) {
-      this.interimEl = document.createElement('div');
-      this.interimEl.className = 'subtitle-line interim';
-      this.container.appendChild(this.interimEl);
-      this.interimEl.offsetHeight;
-      requestAnimationFrame(() => this.interimEl.classList.add('shown'));
-    }
-    this.interimEl.textContent = text;
+    this._render(`${this._committed} ${text}`.trim());
   }
 
-  /** Svuota tutte le righe (es. su cambio stanza). */
+  /** Segmento finalizzato: lo consolida e continua il flusso. */
+  appendFinal(text) {
+    if (!text) return;
+    this._committed = this._tailByWords(`${this._committed} ${text}`.trim());
+    this._render(this._committed);
+  }
+
+  /** Azzera tutto (es. cambio stanza / sessione terminata). */
   clear() {
-    this.container.innerHTML = '';
-    this.interimEl = null;
-  }
-
-  _pruneOldLines() {
-    const finalLines = Array.from(this.container.querySelectorAll('.subtitle-line.final'));
-    const excess = finalLines.length - this.maxLines;
-    for (let i = 0; i < excess; i++) {
-      const el = finalLines[i];
-      el.classList.add('fading');
-      el.classList.remove('shown');
-      const remove = () => el.remove();
-      el.addEventListener('transitionend', remove, { once: true });
-      // Rete di sicurezza: se la finestra/tab e' in background le transizioni
-      // CSS possono essere sospese dal motore di rendering e 'transitionend'
-      // non scatta mai, causando accumulo di nodi DOM durante un evento lungo.
-      setTimeout(remove, this.fallbackRemoveMs);
-    }
+    this._committed = '';
+    this._rendered = '';
+    this._lastHeadWord = '';
+    this.streamEl.textContent = '';
   }
 }

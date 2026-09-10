@@ -20,3 +20,10 @@ services:
         value: "60"
       - key: ROOM_MAX_IDLE_HOURS
         value: "6"
+      # Facoltativa: una tua email alza la quota gratuita di MyMemory da
+      # ~5.000 a ~50.000 parole/giorno. Lasciala vuota per non usarla.
+      # Lo streaming parola-per-parola consuma molte piu' traduzioni: senza
+      # questa (o un traduttore a pagamento) la quota dura pochi minuti di
+      # parlato continuo, poi i sottotitoli mostrano il testo NON tradotto.
+      - key: MYMEMORY_EMAIL
+        value: ""
