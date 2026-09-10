@@ -84,7 +84,13 @@ populateDisplays();
 // -------------------------------------------------------------------
 // 2) Connessione Socket.io + join stanza (persistenza server/codice)
 // -------------------------------------------------------------------
-serverInput.value = localStorage.getItem('lt_overlay_server') || '';
+// URL del server permanente su Render: precompilato cosi' l'utente deve solo
+// incollare il codice stanza. Modificabile a mano e ricordato dopo la 1a connessione.
+const DEFAULT_SERVER = 'https://trascrizione-eventi.onrender.com';
+const storedServer = localStorage.getItem('lt_overlay_server') || '';
+// Ignora eventuali URL di tunnel temporanei (trycloudflare) rimasti in memoria
+// da vecchi test: usano un sottodominio che cambia e non e' piu' valido.
+serverInput.value = (storedServer && !/trycloudflare\.com/.test(storedServer)) ? storedServer : DEFAULT_SERVER;
 roomInput.value = localStorage.getItem('lt_overlay_room') || '';
 
 let socket = null;
