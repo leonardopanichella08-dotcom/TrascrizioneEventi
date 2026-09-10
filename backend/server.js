@@ -34,7 +34,7 @@ app.get('/health', (_req, res) => {
     activeRooms: roomManager.rooms.size,
     uptimeSeconds: process.uptime(),
     // true = quota MyMemory alzata (~50k parole/giorno). Non espone l'email.
-    translateQuotaBoosted: Boolean(process.env.MYMEMORY_EMAIL),
+    translateQuotaBoosted: Boolean(process.env.MYMEMORY_ACCOUNT_EMAIL),
   });
 });
 
