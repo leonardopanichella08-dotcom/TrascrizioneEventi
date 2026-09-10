@@ -12,9 +12,12 @@ html, body {
 }
 
 /* ===================== ANGOLO DI CONTROLLO ===================== */
+/* Ancorato in basso a destra e con ordine invertito: il badge sta sotto,
+   il pannello si apre VERSO L'ALTO (la finestra si allarga di conseguenza,
+   vedi main.js) cosi' non finisce mai sotto il bordo dello schermo. */
 #controlZone {
-  position: absolute; top: 10px; right: 10px;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+  position: absolute; right: 10px; bottom: 216px; top: auto;
+  display: flex; flex-direction: column-reverse; align-items: flex-end; gap: 8px;
   z-index: 10;
 }
 
@@ -69,6 +72,9 @@ body.badge-hidden #revealZone { pointer-events: auto; }
 #panel {
   display: none;
   width: 260px;
+  max-height: calc(100vh - 90px);   /* rete di sicurezza: se non ci sta, scorre */
+  overflow-y: auto;
+  overflow-x: hidden;
   background: rgba(18,18,18,0.92);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -87,10 +93,12 @@ body.badge-hidden #revealZone { pointer-events: auto; }
   font-family: inherit;
 }
 .field input:focus, .field select:focus { border-color: var(--live); }
-#roomInput { text-transform: uppercase; letter-spacing: 0.15em; text-align: center; font-weight: 700; }
+#roomInput { text-transform: uppercase; letter-spacing: 0.12em; text-align: center; font-weight: 700; min-width: 0; flex: 1; }
 
 .row { display: flex; gap: 8px; }
-.row button { flex: 1; }
+.row button { flex: 1; min-width: 0; }
+/* Nella riga del codice: input elastico, "Incolla" della sua larghezza. */
+.field .row #pasteBtn { flex: 0 0 auto; }
 
 button {
   font-family: inherit; font-size: 0.8rem; font-weight: 700;

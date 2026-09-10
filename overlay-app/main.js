@@ -3,9 +3,11 @@
 const path = require('path');
 const { app, BrowserWindow, screen, ipcMain, clipboard } = require('electron');
 
-// Altezza della fascia sottotitoli in basso allo schermo (px). Fissa per
-// semplicita': copre chip + pannello di controllo senza invadere la slide.
+// Altezza normale: solo la fascia sottotitoli in basso allo schermo.
 const OVERLAY_HEIGHT = 260;
+// Altezza quando il pannello impostazioni e' aperto: la finestra si allarga
+// verso l'alto (il bordo inferiore resta ancorato) per dare spazio al pannello.
+const OVERLAY_HEIGHT_PANEL = 680;
 
 // Protocollo custom (es. livetranslate://join?server=...&room=ABC123) che
 // permette al sito web di riaprire/richiamare questa app gia' pronta e
@@ -14,6 +16,8 @@ const PROTOCOL = 'livetranslate';
 
 let overlayWindow = null;
 let pendingAutoConnect = null; // dati in attesa se il link arriva prima che la finestra sia pronta
+let currentDisplayId = null;   // schermo su cui e' posizionato l'overlay
+let panelExpanded = false;      // true = finestra allargata per il pannello
 
 function listDisplaysForRenderer() {
   const primary = screen.getPrimaryDisplay();
@@ -25,14 +29,29 @@ function listDisplaysForRenderer() {
   }));
 }
 
-/** Calcola i bounds di una fascia ancorata al bordo inferiore del display scelto. */
-function bottomStripBounds(display) {
+/** Bounds ancorati al bordo inferiore del display; alti a sufficienza se il
+ *  pannello e' aperto (la finestra "cresce" verso l'alto, non verso il basso). */
+function bottomStripBounds(display, expanded = panelExpanded) {
+  const h = Math.min(
+    expanded ? OVERLAY_HEIGHT_PANEL : OVERLAY_HEIGHT,
+    display.bounds.height,
+  );
   return {
     x: display.bounds.x,
-    y: display.bounds.y + display.bounds.height - OVERLAY_HEIGHT,
+    y: display.bounds.y + display.bounds.height - h,
     width: display.bounds.width,
-    height: OVERLAY_HEIGHT,
+    height: h,
   };
+}
+
+function displayById(id) {
+  return screen.getAllDisplays().find((d) => d.id === id) || null;
+}
+
+function applyOverlayBounds() {
+  if (!overlayWindow) return;
+  const display = displayById(currentDisplayId) || pickDefaultDisplay();
+  overlayWindow.setBounds(bottomStripBounds(display));
 }
 
 function pickDefaultDisplay() {
@@ -91,6 +110,7 @@ function handleIncomingArgvForRunningApp(argv) {
 
 function createOverlayWindow(initialAutoConnect) {
   const targetDisplay = pickDefaultDisplay();
+  currentDisplayId = targetDisplay.id;
   const bounds = bottomStripBounds(targetDisplay);
 
   overlayWindow = new BrowserWindow({
@@ -165,10 +185,16 @@ ipcMain.on('overlay:set-interactive', (_event, interactive) => {
 ipcMain.handle('overlay:get-displays', () => listDisplaysForRenderer());
 
 ipcMain.on('overlay:move-to-display', (_event, displayId) => {
-  if (!overlayWindow) return;
-  const target = screen.getAllDisplays().find((d) => d.id === displayId);
-  if (!target) return;
-  overlayWindow.setBounds(bottomStripBounds(target));
+  if (!overlayWindow || !displayById(displayId)) return;
+  currentDisplayId = displayId;
+  applyOverlayBounds();
+});
+
+// Il renderer avvisa quando apre/chiude il pannello: allarghiamo la finestra
+// verso l'alto cosi' il pannello non finisce sotto il bordo dello schermo.
+ipcMain.on('overlay:set-panel-open', (_event, open) => {
+  panelExpanded = Boolean(open);
+  applyOverlayBounds();
 });
 
 ipcMain.on('overlay:quit', () => app.quit());

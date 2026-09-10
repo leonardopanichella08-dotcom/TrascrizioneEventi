@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('overlayAPI', {
   setInteractive: (interactive) => ipcRenderer.send('overlay:set-interactive', interactive),
   getDisplays: () => ipcRenderer.invoke('overlay:get-displays'),
   moveToDisplay: (displayId) => ipcRenderer.send('overlay:move-to-display', displayId),
+  setPanelOpen: (open) => ipcRenderer.send('overlay:set-panel-open', open),
   quit: () => ipcRenderer.send('overlay:quit'),
   // Chiamato quando l'utente arriva da un link livetranslate://join?... sul sito.
   onAutoConnect: (callback) => ipcRenderer.on('overlay:auto-connect', (_event, data) => callback(data)),

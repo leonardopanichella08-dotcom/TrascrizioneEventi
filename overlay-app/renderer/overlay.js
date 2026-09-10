@@ -44,20 +44,20 @@ controlZone.addEventListener('mouseleave', () => {
   if (!panel.classList.contains('open')) window.overlayAPI.setInteractive(false);
 });
 
-toggleBtn.addEventListener('click', () => {
-  panel.classList.toggle('open');
-  if (!panel.classList.contains('open')) {
+/** Apre/chiude il pannello e avvisa il processo main (allarga/restringe la finestra). */
+function setPanel(open) {
+  panel.classList.toggle('open', open);
+  window.overlayAPI.setPanelOpen(open);
+  if (!open) {
     window.overlayAPI.setInteractive(false);
   } else if (!socket && !roomInput.value) {
-    // All'apertura del pannello, se non siamo connessi e il campo e' vuoto,
-    // proviamo a recuperare il codice dagli appunti senza disturbare l'utente.
+    // All'apertura, se non connessi e campo vuoto, proviamo il codice dagli appunti.
     fillRoomFromClipboard(true);
   }
-});
-collapseBtn.addEventListener('click', () => {
-  panel.classList.remove('open');
-  window.overlayAPI.setInteractive(false);
-});
+}
+
+toggleBtn.addEventListener('click', () => setPanel(!panel.classList.contains('open')));
+collapseBtn.addEventListener('click', () => setPanel(false));
 
 // "Ferma sessione e chiudi": lascia la stanza (lo dice al server) e chiude l'app.
 stopBtn.addEventListener('click', () => {
@@ -74,9 +74,8 @@ quitQuickBtn.addEventListener('click', (e) => {
 // "Nascondi badge": solo estetica. I sottotitoli continuano, la connessione
 // resta. Per riportarlo: passare il mouse nell'angolo in alto a destra.
 hideBadgeBtn.addEventListener('click', () => {
-  panel.classList.remove('open');
+  setPanel(false);
   document.body.classList.add('badge-hidden');
-  window.overlayAPI.setInteractive(false);
 });
 revealZone.addEventListener('mouseenter', () => {
   document.body.classList.remove('badge-hidden');
@@ -162,8 +161,7 @@ function connect() {
       setMessage(res.speakerConnected ? '' : 'In attesa dello speaker...');
       connectBtn.hidden = true;
       disconnectBtn.hidden = false;
-      panel.classList.remove('open');
-      window.overlayAPI.setInteractive(false);
+      setPanel(false); // connesso: chiudi il pannello e restringi la finestra
     });
   });
 
