@@ -21,38 +21,56 @@ function generateChunkId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function shortLang(code) {
+  return String(code || '').trim().toLowerCase().split('-')[0] || 'en';
+}
+
 /**
- * Funzione di traduzione di default: modulare e sostituibile.
- * Pronta per essere collegata a DeepL / OpenAI (gpt-4o-mini) / Google
- * Translate / LibreTranslate impostando `engine.setTranslator(fn)`.
- *
- * Se non e' configurato alcun endpoint reale, restituisce il testo
- * originale con un prefisso esplicito, cosi' l'app resta funzionante
- * end-to-end anche senza chiavi API durante lo sviluppo.
+ * Traduzione via MyMemory chiamata DIRETTAMENTE dal browser dello Speaker.
+ * Motivo: i servizi gratuiti bloccano gli IP dei datacenter (il proxy sul
+ * server Render viene rifiutato con 403/429), mentre il browser dello Speaker
+ * ha un IP residenziale normale. MyMemory invia header CORS permissivi.
+ * L'email (window.LIVE_TRANSLATE_CONFIG.translateEmail) alza la quota a ~50k
+ * parole/giorno; viene inviata solo a MyMemory.
+ */
+async function translateViaMyMemory(text, sourceLang, targetLang) {
+  const langpair = `${shortLang(sourceLang)}|${shortLang(targetLang)}`;
+  const email = window.LIVE_TRANSLATE_CONFIG?.translateEmail;
+  const de = email ? `&de=${encodeURIComponent(email)}` : '';
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(langpair)}${de}`;
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`MyMemory HTTP ${response.status}`);
+  const data = await response.json();
+  if (data.responseStatus && Number(data.responseStatus) !== 200) {
+    throw new Error(data.responseDetails || 'MyMemory ha rifiutato la richiesta');
+  }
+  const t = data.responseData?.translatedText;
+  if (!t) throw new Error('Risposta di traduzione vuota');
+  return t;
+}
+
+/**
+ * Funzione di traduzione di default: prova MyMemory dal browser; se fallisce,
+ * ripiega sul proxy del server (`translateEndpoint`). Sostituibile del tutto
+ * con `engine.setTranslator(fn)` per collegare DeepL / OpenAI.
  */
 async function defaultTranslate(text, sourceLang, targetLang) {
   if (!text) return '';
-
-  const endpoint = window.LIVE_TRANSLATE_CONFIG?.translateEndpoint;
-  if (!endpoint) {
-    return `[traduzione non configurata] ${text}`;
+  try {
+    return await translateViaMyMemory(text, sourceLang, targetLang);
+  } catch (browserErr) {
+    const endpoint = window.LIVE_TRANSLATE_CONFIG?.translateEndpoint;
+    if (!endpoint) throw browserErr;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, source: sourceLang, target: targetLang }),
+    });
+    if (!response.ok) throw new Error(`Traduzione non disponibile (HTTP ${response.status})`);
+    const data = await response.json();
+    return data.translatedText ?? data.translation ?? text;
   }
-
-  // Esempio di contratto REST generico (compatibile con un proxy verso
-  // DeepL / OpenAI / Google / LibreTranslate lato server, per non esporre
-  // API key nel browser). Il body puo' essere adattato al provider scelto.
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, source: sourceLang, target: targetLang }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Servizio di traduzione non disponibile (HTTP ${response.status})`);
-  }
-
-  const data = await response.json();
-  return data.translatedText ?? data.translation ?? text;
 }
 
 const RECOGNITION_ERROR_MESSAGES = {

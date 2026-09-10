@@ -14,9 +14,11 @@
     serverUrl: (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
       ? 'http://localhost:3001'
       : location.origin,
-    // Endpoint del proxy di traduzione lato server (vedi POST /translate in backend/server.js,
-    // che si appoggia all'API gratuita MyMemory). Percorso relativo: funziona sempre,
-    // perche' il backend serve anche questi file statici dalla stessa origine.
+    // La traduzione parte dal browser dello Speaker (IP residenziale, non
+    // bloccato dai servizi gratuiti come invece l'IP del server). Questa email
+    // alza la quota MyMemory a ~50k parole/giorno ed e' inviata solo a MyMemory.
+    translateEmail: 'leonardopanichella08@gmail.com',
+    // Ripiego se la chiamata dal browser fallisce: proxy sul server.
     translateEndpoint: '/translate',
   };
 
