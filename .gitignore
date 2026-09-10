@@ -1,0 +1,15 @@
+# Dipendenze (reinstallabili con npm install)
+node_modules/
+
+# Output di build dell'app desktop (rigenerabile con: cd overlay-app && npm run dist)
+dist/
+overlay-app/dist/
+
+# Segreti / configurazione locale
+.env
+*.local
+
+# Log e file di sistema
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Live Translate — Proiettore</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+  :root {
+    --bg: #000000;
+    --ink: #F5F5F7;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg);
+    font-family: 'Inter', 'SF Pro Display', system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+  }
+  /* Modalita' trasparente: per usare questa pagina come overlay (es. OBS Browser
+     Source) sopra un'altra sorgente, attivabile con ?transparent=1 nell'URL. */
+  html.transparent, html.transparent body { background: transparent; }
+  body.cursor-hidden, body.cursor-hidden * { cursor: none !important; }
+
+  /* ===================== SCHERMATA 1: PAIRING ===================== */
+  #pairingScreen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 28px;
+    background: var(--bg);
+    z-index: 20;
+  }
+  html.transparent #pairingScreen { background: rgba(0,0,0,0.85); }
+  #pairingForm {
+    display: flex; flex-direction: column; align-items: center; gap: 28px;
+  }
+  #pairingScreen h1 {
+    color: var(--ink); font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 600;
+    letter-spacing: 0.02em; margin: 0; text-align: center; padding: 0 16px;
+  }
+  #codeInput {
+    background: #121212;
+    border: 1px solid #2A2A2A;
+    color: var(--ink);
+    font-size: clamp(2rem, 8vw, 3.5rem);
+    font-weight: 700;
+    letter-spacing: 0.35em;
+    text-align: center;
+    text-transform: uppercase;
+    width: min(90vw, 480px);
+    padding: 18px 10px 18px 24px; /* compensa letter-spacing per centratura ottica */
+    border-radius: 18px;
+    outline: none;
+  }
+  #codeInput:focus { border-color: #30D158; }
+  #connectBtn {
+    background: #30D158; color: #000; border: none;
+    font-size: 1.05rem; font-weight: 700;
+    padding: 16px 40px; border-radius: 16px;
+    cursor: pointer; letter-spacing: 0.03em;
+    transition: filter 0.15s ease, transform 0.1s ease;
+  }
+  #connectBtn:hover { filter: brightness(1.1); }
+  #connectBtn:active { transform: scale(0.97); }
+  #connectBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+  #pairingError {
+    color: #FF453A; font-size: 0.95rem; min-height: 1.2em; text-align: center;
+  }
+  #pairingHint { color: #A1A1A6; font-size: 0.85rem; text-align: center; padding: 0 16px; }
+
+  /* ===================== HANDOFF: passaggio all'app desktop ===================== */
+  #handoffState {
+    display: none;
+    flex-direction: column; align-items: center; gap: 20px;
+    text-align: center; padding: 0 16px;
+  }
+  #handoffState.active { display: flex; }
+  #handoffState p.hint { color: #A1A1A6; font-size: 0.85rem; max-width: 420px; line-height: 1.5; }
+  #retryAppBtn {
+    background: #30D158; color: #000; border: none;
+    font-size: 1.05rem; font-weight: 700;
+    padding: 16px 40px; border-radius: 16px;
+    cursor: pointer; letter-spacing: 0.03em;
+    transition: filter 0.15s ease, transform 0.1s ease;
+  }
+  #retryAppBtn:hover { filter: brightness(1.1); }
+  #retryAppBtn:active { transform: scale(0.97); }
+  #continueBrowserBtn {
+    background: transparent; color: #A1A1A6; border: none;
+    font-size: 0.85rem; text-decoration: underline; cursor: pointer;
+    padding: 4px;
+  }
+  #continueBrowserBtn:hover { color: #F5F5F7; }
+
+  /* ===================== SCHERMATA 2: VISTA LIVE ===================== */
+  #liveScreen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: none;
+  }
+  html.transparent #liveScreen { background: transparent; }
+  #liveScreen.active { display: block; }
+
+  #statusBadge {
+    position: absolute; top: 20px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px;
+    color: #A1A1A6; font-size: 0.8rem;
+    background: rgba(18,18,18,0.75);
+    border: 1px solid #2A2A2A;
+    padding: 6px 8px 6px 14px; border-radius: 999px;
+    opacity: 0; transition: opacity 0.4s ease;
+    pointer-events: none;
+    z-index: 5;
+    white-space: nowrap;
+  }
+  #statusBadge.visible { opacity: 1; }
+  #statusBadgeClose {
+    pointer-events: auto;
+    cursor: pointer;
+    background: rgba(255,255,255,0.08);
+    border: none; color: #A1A1A6;
+    width: 18px; height: 18px; border-radius: 50%;
+    font-size: 0.85rem; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  #statusBadgeClose:hover { background: rgba(255,255,255,0.18); color: #F5F5F7; }
+
+  #subtitleZone {
+    position: absolute;
+    left: 4%; right: 4%;
+    bottom: 4%;
+    max-height: 32%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.5em;
+    overflow: hidden;
+  }
+
+  /* Testo puro, senza alcun riquadro/sfondo: bianco con un leggero contorno
+     nero (stroke + shadow) per restare leggibile sopra qualsiasi contenuto
+     sottostante (slide, PDF, pagina web), come una sovrapposizione PNG. */
+  .subtitle-line {
+    color: #ffffff;
+    -webkit-text-stroke: 1px rgba(0,0,0,0.9);
+    max-width: 100%;
+    font-size: clamp(1rem, 2.1vw, 1.7rem);
+    font-weight: 600;
+    line-height: 1.3;
+    text-align: center;
+    text-shadow: 0 0 3px rgba(0,0,0,0.85), 0 0 8px rgba(0,0,0,0.6), 0 1px 2px rgba(0,0,0,0.8);
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+                transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+  .subtitle-line.shown { opacity: 1; transform: translateY(0); }
+  .subtitle-line.fading { opacity: 0; transform: translateY(-18px); }
+  .subtitle-line.interim { opacity: 0.7; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<!-- ============================ SCHERMATA 1: PAIRING ============================ -->
+<div id="pairingScreen">
+  <div id="pairingForm">
+    <h1>Inserisci il codice della stanza</h1>
+    <input id="codeInput" type="text" inputmode="text" maxlength="6" autocomplete="off" spellcheck="false" placeholder="------" />
+    <button id="connectBtn">Connetti Proiettore</button>
+    <p id="pairingError"></p>
+    <p id="pairingHint">Puoi anche aprire questo link con <code>?room=CODICE</code> per la connessione automatica.</p>
+  </div>
+
+  <div id="handoffState">
+    <h1>Stanza collegata</h1>
+    <p class="hint">Premi il pulsante per aprire l'app overlay (deve essere installata sul PC collegato al proiettore).</p>
+    <button id="retryAppBtn">Apri l'app overlay</button>
+    <button id="continueBrowserBtn">Continua invece nel browser</button>
+  </div>
+</div>
+
+<!-- ============================ SCHERMATA 2: VISTA LIVE ============================ -->
+<div id="liveScreen">
+  <div id="statusBadge">
+    <span id="statusBadgeText"></span>
+    <button id="statusBadgeClose" title="Nascondi">×</button>
+  </div>
+  <div id="subtitleZone"></div>
+</div>
+
+<script type="module">
+  import { SubtitleRenderer } from './js/subtitle-renderer.js';
+
+  // -------------------------------------------------------------------
+  // Config
+  // -------------------------------------------------------------------
+  const SERVER_URL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? 'http://localhost:3001'
+    : location.origin;
+  const CURSOR_IDLE_MS = 3000;
+
+  const params = new URLSearchParams(location.search);
+  if (params.get('transparent') === '1') {
+    document.documentElement.classList.add('transparent');
+  }
+
+  // -------------------------------------------------------------------
+  // Riferimenti DOM
+  // -------------------------------------------------------------------
+  const statusBadgeText = document.getElementById('statusBadgeText');
+  const statusBadgeClose = document.getElementById('statusBadgeClose');
+  const pairingScreen = document.getElementById('pairingScreen');
+  const pairingForm = document.getElementById('pairingForm');
+  const handoffState = document.getElementById('handoffState');
+  const retryAppBtn = document.getElementById('retryAppBtn');
+  const continueBrowserBtn = document.getElementById('continueBrowserBtn');
+  const liveScreen = document.getElementById('liveScreen');
+  const codeInput = document.getElementById('codeInput');
+  const connectBtn = document.getElementById('connectBtn');
+  const pairingError = document.getElementById('pairingError');
+  const statusBadge = document.getElementById('statusBadge');
+  const subtitleZone = document.getElementById('subtitleZone');
+
+  const renderer = new SubtitleRenderer(subtitleZone, { maxLines: 3 });
+
+  // -------------------------------------------------------------------
+  // Socket.io: connessione lazy, join solo su richiesta esplicita/URL
+  // -------------------------------------------------------------------
+  const socket = io(SERVER_URL, { transports: ['websocket', 'polling'], autoConnect: true });
+  let joinedRoomId = null;
+
+  function showBadge(text, autoHideMs) {
+    statusBadgeText.textContent = text;
+    statusBadge.classList.add('visible');
+    if (autoHideMs) {
+      clearTimeout(showBadge._t);
+      showBadge._t = setTimeout(() => statusBadge.classList.remove('visible'), autoHideMs);
+    }
+  }
+  function hideBadge() {
+    statusBadge.classList.remove('visible');
+  }
+  statusBadgeClose.addEventListener('click', hideBadge);
+
+  function attemptJoin(roomId) {
+    const clean = (roomId || '').toUpperCase().trim();
+    if (!/^[A-Z0-9]{6}$/.test(clean)) {
+      pairingError.textContent = 'Il codice deve avere 6 caratteri alfanumerici.';
+      return;
+    }
+    pairingError.textContent = '';
+    connectBtn.disabled = true;
+    connectBtn.textContent = 'Connessione...';
+
+    socket.emit('display:join-room', { roomId: clean }, (res) => {
+      connectBtn.disabled = false;
+      connectBtn.textContent = 'Connetti Proiettore';
+
+      if (!res?.ok) {
+        pairingError.textContent = res?.message || 'Impossibile connettersi alla stanza.';
+        return;
+      }
+      joinedRoomId = res.roomId;
+      lastJoinSpeakerConnected = Boolean(res.speakerConnected);
+      showHandoffScreen(res.roomId);
+    });
+  }
+
+  function enterLiveScreen() {
+    pairingScreen.style.display = 'none';
+    liveScreen.classList.add('active');
+    // Aggiorna l'URL cosi' un refresh della pagina riconnette automaticamente.
+    const url = new URL(location.href);
+    url.searchParams.set('room', joinedRoomId);
+    history.replaceState(null, '', url);
+    if (!lastJoinSpeakerConnected) showBadge('In attesa dello speaker...');
+  }
+
+  // -------------------------------------------------------------------
+  // Handoff all'app desktop: per design, i sottotitoli in overlay sopra
+  // altre finestre (PowerPoint/PDF/pagine web) richiedono l'app dedicata —
+  // una pagina browser non puo' sovrapporsi ad altre finestre del sistema.
+  // Qui tentiamo di aprirla automaticamente via link livetranslate://,
+  // con fallback manuale per chi non l'ha ancora installata.
+  // -------------------------------------------------------------------
+  let lastJoinSpeakerConnected = false;
+
+  function triggerAppHandoff(roomId) {
+    const protoUrl = `livetranslate://join?server=${encodeURIComponent(SERVER_URL)}&room=${roomId}`;
+    window.location.href = protoUrl;
+  }
+
+  function showHandoffScreen(roomId) {
+    pairingForm.style.display = 'none';
+    handoffState.classList.add('active');
+    // Il click sul pulsante e' l'UNICO innesco: molti browser bloccano in
+    // silenzio l'apertura di un'app esterna se non parte da un gesto diretto
+    // e immediato dell'utente (non da una callback asincrona come questa).
+  }
+
+  retryAppBtn.addEventListener('click', () => triggerAppHandoff(joinedRoomId));
+  continueBrowserBtn.addEventListener('click', () => enterLiveScreen());
+
+  connectBtn.addEventListener('click', () => attemptJoin(codeInput.value));
+  codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') attemptJoin(codeInput.value); });
+  codeInput.addEventListener('input', () => {
+    codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+  });
+
+  // Autoconnessione via ?room=CODICE
+  const roomFromUrl = params.get('room');
+  if (roomFromUrl) {
+    codeInput.value = roomFromUrl.toUpperCase();
+    socket.on('connect', function autoJoinOnce() {
+      attemptJoin(roomFromUrl);
+      socket.off('connect', autoJoinOnce);
+    });
+  }
+
+  // -------------------------------------------------------------------
+  // Eventi di stato stanza (badge discreto, non invasivo)
+  // -------------------------------------------------------------------
+  socket.on('speaker:disconnected', () => showBadge('Speaker disconnesso — in attesa di riaggancio...'));
+  socket.on('speaker:reconnected', () => showBadge('Speaker riconnesso', 2000));
+  socket.on('speaker:gone', () => showBadge('Speaker non disponibile'));
+  socket.on('room:state', ({ speakerConnected }) => {
+    if (speakerConnected && statusBadgeText.textContent.includes('attesa')) hideBadge();
+  });
+  socket.on('room:destroyed', () => {
+    showBadge('Sessione terminata.');
+    setTimeout(() => {
+      liveScreen.classList.remove('active');
+      pairingScreen.style.display = 'flex';
+      pairingForm.style.display = '';
+      handoffState.classList.remove('active');
+      codeInput.value = '';
+      renderer.clear();
+      joinedRoomId = null;
+    }, 1500);
+  });
+  socket.on('connect_error', () => showBadge('Connessione al server non riuscita', 3000));
+
+  // -------------------------------------------------------------------
+  // Rendering sottotitoli (logica condivisa in js/subtitle-renderer.js)
+  // -------------------------------------------------------------------
+  socket.on('transcript:update', (payload) => {
+    if (!payload || payload.roomId !== joinedRoomId) return;
+    if (!payload.translatedText) return;
+
+    if (payload.status === 'final') renderer.appendFinal(payload.translatedText);
+    else renderer.updateInterim(payload.translatedText);
+  });
+
+  // -------------------------------------------------------------------
+  // Nasconde il cursore dopo 3s di inattivita' (schermata live, alte prestazioni)
+  // -------------------------------------------------------------------
+  let cursorTimer = null;
+  function resetCursorTimer() {
+    document.body.classList.remove('cursor-hidden');
+    clearTimeout(cursorTimer);
+    cursorTimer = setTimeout(() => document.body.classList.add('cursor-hidden'), CURSOR_IDLE_MS);
+  }
+  window.addEventListener('mousemove', resetCursorTimer, { passive: true });
+  resetCursorTimer();
+</script>
+</body>
+</html>

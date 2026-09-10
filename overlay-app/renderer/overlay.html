@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<title>Live Translate Overlay</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<link rel="stylesheet" href="overlay.css" />
+</head>
+<body>
+
+<!-- Angolo di controllo: sempre presente, si espande al passaggio del mouse/click.
+     E' l'unica zona della finestra che intercetta i click (vedi overlay.js). -->
+<div id="controlZone">
+  <div id="badgeRow">
+    <button id="toggleBtn" title="Impostazioni Live Translate">
+      <span id="statusDot" class="dot off"></span>
+      <span id="toggleLabel">Live Translate</span>
+    </button>
+    <button id="quitQuickBtn" title="Chiudi Live Translate">×</button>
+  </div>
+
+  <div id="panel">
+    <div class="field">
+      <label for="serverInput">URL server</label>
+      <input id="serverInput" type="text" placeholder="https://tuo-server.onrender.com" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label for="roomInput">Codice stanza</label>
+      <div class="row">
+        <input id="roomInput" type="text" maxlength="6" placeholder="------" autocomplete="off" spellcheck="false" />
+        <button id="pasteBtn" class="ghost" title="Incolla il codice copiato">Incolla</button>
+      </div>
+    </div>
+    <div class="row">
+      <button id="connectBtn" class="primary">Connetti</button>
+      <button id="disconnectBtn" class="ghost" hidden>Disconnetti</button>
+    </div>
+
+    <div class="field">
+      <label for="displaySelect">Schermo overlay</label>
+      <select id="displaySelect"></select>
+    </div>
+
+    <p id="panelMessage"></p>
+
+    <div class="row">
+      <button id="collapseBtn" class="ghost">Chiudi pannello</button>
+      <button id="quitBtn" class="danger">Esci</button>
+    </div>
+  </div>
+</div>
+
+<!-- Fascia sottotitoli: riempie il resto della finestra, in trasparenza. -->
+<div id="subtitleZone"></div>
+
+<script type="module" src="overlay.js"></script>
+</body>
+</html>

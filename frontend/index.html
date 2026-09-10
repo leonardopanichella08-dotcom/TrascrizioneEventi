@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Live Translate</title>
+<style>
+  :root {
+    --bg: #000000; --surface: #121212; --surface2: #1E1E1E; --border: #2A2A2A;
+    --title: #F5F5F7; --subtitle: #A1A1A6; --live: #30D158;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--title);
+    font-family: 'Inter', 'SF Pro Display', system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+  }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 40px; padding: 24px;
+  }
+  .brand { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .logo {
+    width: 56px; height: 56px; border-radius: 16px;
+    background: var(--surface2); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--live); font-weight: 800; font-size: 1.3rem;
+  }
+  h1 { margin: 0; font-size: 1.4rem; font-weight: 600; letter-spacing: -0.01em; }
+  p.tagline { margin: 0; color: var(--subtitle); font-size: 0.95rem; text-align: center; }
+
+  .choices {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 18px;
+    width: 100%; max-width: 720px;
+  }
+  .choice-card {
+    flex: 1 1 260px; max-width: 320px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+    padding: 28px 22px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    text-decoration: none; color: inherit;
+    transition: border-color 0.2s ease, transform 0.15s ease;
+  }
+  .choice-card:hover { border-color: var(--live); transform: translateY(-2px); }
+  .choice-card:active { transform: scale(0.98); }
+  .choice-icon {
+    width: 52px; height: 52px; border-radius: 14px;
+    background: var(--surface2); display: flex; align-items: center; justify-content: center;
+  }
+  .choice-title { font-size: 1.15rem; font-weight: 700; }
+  .choice-desc { color: var(--subtitle); font-size: 0.88rem; line-height: 1.4; }
+
+  .overlay-note {
+    max-width: 560px; text-align: center; color: var(--subtitle); font-size: 0.82rem;
+    border-top: 1px solid var(--border); padding-top: 20px; line-height: 1.5;
+  }
+  .overlay-note a { color: var(--live); text-decoration: none; }
+  .overlay-note a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="brand">
+  <div class="logo">LT</div>
+  <h1>Live Translate</h1>
+  <p class="tagline">Trascrizione e traduzione simultanea per eventi</p>
+</div>
+
+<div class="choices">
+  <a class="choice-card" href="dashboard.html">
+    <div class="choice-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#30D158" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+        <line x1="12" y1="19" x2="12" y2="23"></line>
+        <line x1="8" y1="23" x2="16" y2="23"></line>
+      </svg>
+    </div>
+    <div class="choice-title">Sono lo Speaker</div>
+    <div class="choice-desc">Avvia una nuova sessione dal tuo telefono o computer: parla e genera automaticamente il codice stanza.</div>
+  </a>
+
+  <a class="choice-card" href="display.html">
+    <div class="choice-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#30D158" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+        <line x1="8" y1="21" x2="16" y2="21"></line>
+        <line x1="12" y1="17" x2="12" y2="21"></line>
+      </svg>
+    </div>
+    <div class="choice-title">Sono lo Schermo</div>
+    <div class="choice-desc">Inserisci il codice stanza: si aprirà automaticamente l'app overlay sul proiettore (se installata), oppure puoi continuare nel browser.</div>
+  </a>
+</div>
+
+<p class="overlay-note">
+  I sottotitoli in overlay sopra PowerPoint, PDF o qualsiasi altra finestra
+  richiedono l'app desktop dedicata (non una pagina browser, per limiti di
+  sicurezza del web). Scegliendo "Sono lo Schermo" e abbinando il codice, si
+  apre automaticamente se è già installata sul PC — altrimenti vedi
+  <code>overlay-app/README.md</code> nel progetto.
+</p>
+
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "name": "live-translate-overlay",
+  "version": "1.0.0",
+  "description": "Finestra desktop trasparente, sempre in primo piano, per sovrapporre i sottotitoli di Live Translate a qualsiasi presentazione (PowerPoint, PDF, pagine web).",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.livetranslate.overlay",
+    "productName": "Live Translate Overlay",
+    "files": ["main.js", "preload.js", "renderer/**/*"],
+    "win": { "target": "portable" },
+    "protocols": [
+      { "name": "Live Translate Overlay", "schemes": ["livetranslate"] }
+    ]
+  }
+}

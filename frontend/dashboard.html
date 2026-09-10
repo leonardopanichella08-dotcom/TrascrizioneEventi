@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Live Translate — Pannello Speaker</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+  // Config globale letta dal modulo di traduzione ed dal socket bootstrap.
+  window.LIVE_TRANSLATE_CONFIG = {
+    // In produzione sostituire con l'URL del backend deployato (Render/Railway).
+    serverUrl: (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+      ? 'http://localhost:3001'
+      : location.origin,
+    // Endpoint del proxy di traduzione lato server (vedi POST /translate in backend/server.js,
+    // che si appoggia all'API gratuita MyMemory). Percorso relativo: funziona sempre,
+    // perche' il backend serve anche questi file statici dalla stessa origine.
+    translateEndpoint: '/translate',
+  };
+
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: '#000000',
+          surface: '#121212',
+          surface2: '#1E1E1E',
+          border: '#2A2A2A',
+          title: '#F5F5F7',
+          subtitle: '#A1A1A6',
+          live: '#30D158',
+          off: '#FF453A',
+        },
+        fontFamily: {
+          sans: ['Inter', 'SF Pro Display', 'system-ui', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  html, body {
+    background-color: #000000;
+    font-family: 'Inter', 'SF Pro Display', system-ui, sans-serif;
+    /* Rete di sicurezza anti-overflow: nessun elemento (box ombre, letter-spacing, ecc.)
+       puo' generare uno scroll orizzontale, a prescindere dal device. */
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  * { min-width: 0; } /* evita che i figli flex forzino la larghezza oltre il contenitore */
+  .led { box-shadow: 0 0 6px currentColor; }
+  .led-live { animation: pulse-live 1.6s ease-in-out infinite; }
+  @keyframes pulse-live {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+  .btn-press:active { transform: scale(0.97); }
+  #liveBox::-webkit-scrollbar { width: 6px; }
+  #liveBox::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 3px; }
+</style>
+</head>
+<body class="min-h-screen bg-bg text-title antialiased">
+
+<div class="max-w-3xl mx-auto px-4 py-6 flex flex-col gap-6 min-h-screen">
+
+  <!-- ============================ HEADER ============================ -->
+  <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between items-center gap-3">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 shrink-0 rounded-lg bg-surface2 border border-border flex items-center justify-center text-live font-bold">LT</div>
+      <span class="text-lg font-semibold tracking-tight whitespace-nowrap">Live Translate</span>
+    </div>
+
+    <div class="flex items-center flex-wrap justify-center gap-2.5 max-w-full">
+      <div class="flex items-center gap-1.5 text-sm text-subtitle whitespace-nowrap">
+        <span id="connDot" class="w-2 h-2 shrink-0 rounded-full bg-off led"></span>
+        <span id="connLabel">Connessione...</span>
+      </div>
+      <div class="flex items-center gap-2 bg-surface2 border border-border rounded-lg px-2.5 py-1.5 max-w-full">
+        <span class="text-[10px] sm:text-xs text-subtitle uppercase tracking-wide whitespace-nowrap">Codice</span>
+        <span id="roomCode" class="font-mono text-base sm:text-lg font-bold tracking-wider whitespace-nowrap">------</span>
+        <button id="copyBtn" title="Copia codice"
+          class="shrink-0 text-subtitle hover:text-title transition-colors btn-press">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== PANNELLO CONFIGURAZIONE LINGUA ==================== -->
+  <section class="bg-surface border border-border rounded-2xl p-4">
+    <div class="flex items-end gap-3">
+      <div class="flex-1">
+        <label class="block text-xs text-subtitle uppercase tracking-wide mb-1.5">Lingua parlata</label>
+        <select id="sourceLang" class="w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-title text-sm focus:outline-none focus:ring-1 focus:ring-live"></select>
+      </div>
+
+      <button id="swapBtn" title="Inverti lingue"
+        class="mb-1 shrink-0 w-10 h-10 rounded-full bg-surface2 border border-border flex items-center justify-center text-subtitle hover:text-title hover:border-live transition-colors btn-press">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 16V4M7 4L3 8M7 4l4 4"></path>
+          <path d="M17 8v12M17 20l4-4M17 20l-4-4"></path>
+        </svg>
+      </button>
+
+      <div class="flex-1">
+        <label class="block text-xs text-subtitle uppercase tracking-wide mb-1.5">Lingua tradotta</label>
+        <select id="targetLang" class="w-full bg-surface2 border border-border rounded-xl px-3 py-2.5 text-title text-sm focus:outline-none focus:ring-1 focus:ring-live"></select>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== CONTROLLI PRINCIPALI ==================== -->
+  <section class="flex flex-col gap-3">
+    <button id="startBtn"
+      class="btn-press w-full py-5 rounded-2xl bg-live text-black text-lg font-bold tracking-wide transition-all duration-300 shadow-lg shadow-live/10 hover:brightness-110">
+      AVVIA TRASCRIZIONE
+    </button>
+    <button id="stopBtn" disabled
+      class="btn-press w-full py-3.5 rounded-2xl bg-surface2 border border-border text-subtitle font-semibold tracking-wide transition-all duration-300 opacity-50 cursor-not-allowed">
+      PAUSA / STOP
+    </button>
+  </section>
+
+  <!-- ==================== STATO ==================== -->
+  <div class="flex items-center justify-center gap-2 text-sm">
+    <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-off led"></span>
+    <span id="statusLabel" class="text-subtitle">In pausa</span>
+  </div>
+
+  <!-- ==================== ANTEPRIMA LIVE LOCALE ==================== -->
+  <section class="flex-1 flex flex-col bg-surface border border-border rounded-2xl p-4 min-h-[220px]">
+    <div class="text-xs text-subtitle uppercase tracking-wide mb-2">Anteprima live</div>
+    <div id="liveBox" class="flex-1 overflow-y-auto flex flex-col gap-2 text-lg leading-snug max-h-[40vh]">
+      <p id="placeholderText" class="text-subtitle italic">Il testo captato e tradotto apparira' qui in tempo reale...</p>
+    </div>
+  </section>
+
+  <p id="errorBanner" class="hidden text-sm text-off bg-off/10 border border-off/30 rounded-xl px-4 py-2.5"></p>
+</div>
+
+<script type="module">
+  import { TranscriptionEngine } from './js/translation-engine.js';
+  import { LANGUAGES } from './js/languages.js';
+
+  // ---------------------------------------------------------------------
+  // Riferimenti DOM
+  // ---------------------------------------------------------------------
+  const connDot = document.getElementById('connDot');
+  const connLabel = document.getElementById('connLabel');
+  const roomCodeEl = document.getElementById('roomCode');
+  const copyBtn = document.getElementById('copyBtn');
+  const sourceLangSel = document.getElementById('sourceLang');
+  const targetLangSel = document.getElementById('targetLang');
+  const swapBtn = document.getElementById('swapBtn');
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const statusDot = document.getElementById('statusDot');
+  const statusLabel = document.getElementById('statusLabel');
+  const liveBox = document.getElementById('liveBox');
+  const placeholderText = document.getElementById('placeholderText');
+  const errorBanner = document.getElementById('errorBanner');
+
+  // ---------------------------------------------------------------------
+  // Popolamento dropdown lingue
+  // ---------------------------------------------------------------------
+  for (const lang of LANGUAGES) {
+    const optSrc = document.createElement('option');
+    optSrc.value = lang.code;
+    optSrc.textContent = lang.label;
+    sourceLangSel.appendChild(optSrc);
+
+    const optTgt = document.createElement('option');
+    optTgt.value = lang.code;
+    optTgt.textContent = lang.label;
+    targetLangSel.appendChild(optTgt);
+  }
+  sourceLangSel.value = 'it';
+  targetLangSel.value = 'en';
+
+  function getSpeechLocale(code) {
+    return LANGUAGES.find((l) => l.code === code)?.speech || 'en-US';
+  }
+
+  swapBtn.addEventListener('click', () => {
+    const a = sourceLangSel.value;
+    sourceLangSel.value = targetLangSel.value;
+    targetLangSel.value = a;
+  });
+
+  // ---------------------------------------------------------------------
+  // Connessione Socket.io + gestione stanza (creazione / riaggancio)
+  // ---------------------------------------------------------------------
+  const socket = io(window.LIVE_TRANSLATE_CONFIG.serverUrl, { transports: ['websocket', 'polling'] });
+
+  let roomId = null;
+
+  function setConnStatus(connected) {
+    connDot.classList.toggle('bg-live', connected);
+    connDot.classList.toggle('bg-off', !connected);
+    connDot.classList.toggle('led-live', connected);
+    connLabel.textContent = connected ? 'Connesso' : 'Disconnesso';
+  }
+
+  socket.on('connect', () => {
+    setConnStatus(true);
+
+    const savedRoomId = sessionStorage.getItem('lt_roomId');
+    const savedSecret = sessionStorage.getItem('lt_speakerSecret');
+
+    if (savedRoomId && savedSecret) {
+      // Prova a riagganciarsi alla stanza precedente (es. refresh pagina o breve disconnessione).
+      socket.emit('speaker:rejoin', { roomId: savedRoomId, speakerSecret: savedSecret }, (res) => {
+        if (res?.ok) {
+          roomId = res.roomId;
+          roomCodeEl.textContent = roomId;
+        } else {
+          createRoom();
+        }
+      });
+    } else {
+      createRoom();
+    }
+  });
+
+  socket.on('disconnect', () => setConnStatus(false));
+
+  function createRoom() {
+    socket.emit('speaker:create-room', {}, (res) => {
+      if (!res?.ok) {
+        showError('Impossibile creare la stanza. Riprova.');
+        return;
+      }
+      roomId = res.roomId;
+      roomCodeEl.textContent = roomId;
+      sessionStorage.setItem('lt_roomId', res.roomId);
+      sessionStorage.setItem('lt_speakerSecret', res.speakerSecret);
+    });
+  }
+
+  copyBtn.addEventListener('click', async () => {
+    if (!roomId) return;
+    try {
+      await navigator.clipboard.writeText(roomId);
+      const original = copyBtn.innerHTML;
+      copyBtn.textContent = '✓';
+      setTimeout(() => (copyBtn.innerHTML = original), 1200);
+    } catch {
+      showError('Copia non riuscita: seleziona manualmente il codice.');
+    }
+  });
+
+  // ---------------------------------------------------------------------
+  // Motore di trascrizione + traduzione
+  // ---------------------------------------------------------------------
+  function showError(message) {
+    errorBanner.textContent = message;
+    errorBanner.classList.remove('hidden');
+  }
+  function clearError() {
+    errorBanner.classList.add('hidden');
+  }
+
+  let interimEl = null;
+
+  function appendFinalLine(original, translated) {
+    if (placeholderText.isConnected) placeholderText.remove();
+    if (interimEl) { interimEl.remove(); interimEl = null; }
+
+    const line = document.createElement('p');
+    line.className = 'text-title';
+    line.textContent = translated;
+    liveBox.appendChild(line);
+    liveBox.scrollTop = liveBox.scrollHeight;
+  }
+
+  function updateInterimPreview(text) {
+    if (placeholderText.isConnected) placeholderText.remove();
+    if (!interimEl) {
+      interimEl = document.createElement('p');
+      interimEl.className = 'text-subtitle italic';
+      liveBox.appendChild(interimEl);
+    }
+    interimEl.textContent = text;
+    liveBox.scrollTop = liveBox.scrollHeight;
+  }
+
+  const engine = new TranscriptionEngine({
+    socket,
+    getRoomId: () => roomId,
+    getSourceLang: () => getSpeechLocale(sourceLangSel.value),
+    getTargetLang: () => targetLangSel.value,
+    onInterim: (text) => updateInterimPreview(text),
+    onTranslationPreview: () => { /* la preview locale mostra l'originale; la traduzione va al display */ },
+    onFinal: ({ original, translated }) => appendFinalLine(original, translated),
+    onError: (msg) => showError(msg),
+    onStatusChange: (listening) => setListeningUI(listening),
+  });
+
+  function setListeningUI(listening) {
+    statusDot.classList.toggle('bg-live', listening);
+    statusDot.classList.toggle('led-live', listening);
+    statusDot.classList.toggle('bg-off', !listening);
+    statusLabel.textContent = listening ? 'In trasmissione live' : 'In pausa';
+
+    startBtn.disabled = listening;
+    startBtn.classList.toggle('opacity-50', listening);
+    startBtn.classList.toggle('cursor-not-allowed', listening);
+
+    stopBtn.disabled = !listening;
+    stopBtn.classList.toggle('opacity-50', !listening);
+    stopBtn.classList.toggle('cursor-not-allowed', !listening);
+  }
+
+  startBtn.addEventListener('click', async () => {
+    clearError();
+    if (!roomId) { showError('Stanza non ancora pronta, attendi la connessione.'); return; }
+    sourceLangSel.disabled = true;
+    targetLangSel.disabled = true;
+    swapBtn.disabled = true;
+    await engine.start();
+  });
+
+  stopBtn.addEventListener('click', () => {
+    engine.stop();
+    sourceLangSel.disabled = false;
+    targetLangSel.disabled = false;
+    swapBtn.disabled = false;
+  });
+
+  // Stato iniziale UI
+  setListeningUI(false);
+</script>
+</body>
+</html>
