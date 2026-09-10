@@ -20,6 +20,17 @@ html, body {
 
 #badgeRow { display: flex; align-items: center; gap: 6px; }
 
+/* Badge nascosto: nulla di visibile, ma la zona-invito in alto a destra
+   diventa attiva per riportarlo passandoci sopra col mouse. */
+body.badge-hidden #controlZone { display: none; }
+#revealZone {
+  position: absolute; top: 0; right: 0;
+  width: 60px; height: 60px;
+  pointer-events: none;
+  z-index: 11;
+}
+body.badge-hidden #revealZone { pointer-events: auto; }
+
 #toggleBtn {
   display: flex; align-items: center; gap: 8px;
   background: rgba(18,18,18,0.85);

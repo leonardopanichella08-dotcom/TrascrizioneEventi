@@ -25,8 +25,10 @@ const disconnectBtn = document.getElementById('disconnectBtn');
 const displaySelect = document.getElementById('displaySelect');
 const panelMessage = document.getElementById('panelMessage');
 const collapseBtn = document.getElementById('collapseBtn');
-const quitBtn = document.getElementById('quitBtn');
+const stopBtn = document.getElementById('stopBtn');
 const quitQuickBtn = document.getElementById('quitQuickBtn');
+const hideBadgeBtn = document.getElementById('hideBadgeBtn');
+const revealZone = document.getElementById('revealZone');
 const pasteBtn = document.getElementById('pasteBtn');
 const subtitleZone = document.getElementById('subtitleZone');
 
@@ -56,11 +58,28 @@ collapseBtn.addEventListener('click', () => {
   panel.classList.remove('open');
   window.overlayAPI.setInteractive(false);
 });
-quitBtn.addEventListener('click', () => window.overlayAPI.quit());
-// Chiusura rapida direttamente dal badge, senza dover aprire il pannello.
+
+// "Ferma sessione e chiudi": lascia la stanza (lo dice al server) e chiude l'app.
+stopBtn.addEventListener('click', () => {
+  disconnect();
+  window.overlayAPI.quit();
+});
+
+// Chiusura rapida diretta dal badge, senza aprire il pannello.
 quitQuickBtn.addEventListener('click', (e) => {
   e.stopPropagation(); // non deve anche far scattare il toggle del pannello
   window.overlayAPI.quit();
+});
+
+// "Nascondi badge": solo estetica. I sottotitoli continuano, la connessione
+// resta. Per riportarlo: passare il mouse nell'angolo in alto a destra.
+hideBadgeBtn.addEventListener('click', () => {
+  panel.classList.remove('open');
+  document.body.classList.add('badge-hidden');
+  window.overlayAPI.setInteractive(false);
+});
+revealZone.addEventListener('mouseenter', () => {
+  document.body.classList.remove('badge-hidden');
 });
 
 // -------------------------------------------------------------------

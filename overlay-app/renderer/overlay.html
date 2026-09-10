@@ -44,11 +44,18 @@
     <p id="panelMessage"></p>
 
     <div class="row">
+      <button id="hideBadgeBtn" class="ghost" title="Nasconde solo il badge, i sottotitoli restano">Nascondi badge</button>
       <button id="collapseBtn" class="ghost">Chiudi pannello</button>
-      <button id="quitBtn" class="danger">Esci</button>
+    </div>
+    <div class="row">
+      <button id="stopBtn" class="danger">Ferma sessione e chiudi</button>
     </div>
   </div>
 </div>
+
+<!-- Zona invisibile in alto a destra: quando il badge e' nascosto, passarci
+     sopra col mouse lo fa riapparire (senza dover ricordare scorciatoie). -->
+<div id="revealZone" title="Mostra il badge Live Translate"></div>
 
 <!-- Fascia sottotitoli: riempie il resto della finestra, in trasparenza. -->
 <div id="subtitleZone"></div>
