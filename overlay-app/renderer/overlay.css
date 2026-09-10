@@ -102,6 +102,8 @@ button.danger { background: transparent; color: var(--off); border: 1px solid rg
   position: absolute;
   left: 3%; right: 3%;
   bottom: 5%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 1.1em);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 1.1em);
   font-size: clamp(1rem, 1.9vw, 1.6rem);   /* un filo piu' grande */
   line-height: 1.32;
   height: 2.9em;                            /* 2 righe + margine per le code (g,p,q) */
